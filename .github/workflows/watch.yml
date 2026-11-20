@@ -45,6 +45,7 @@ jobs:
           DATES: ${{ secrets.DATES }}
           MIN_SEATS: ${{ vars.MIN_SEATS }}
           INTERVAL: ${{ vars.INTERVAL }}
+          LOOP_MINUTES: ${{ vars.LOOP_MINUTES }}
           MODE: ${{ github.event.inputs.mode || '--loop' }}
         run: python3 -u yusai_watch.py "$MODE"
       - uses: actions/cache/save@v4
