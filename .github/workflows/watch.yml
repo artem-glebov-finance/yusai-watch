@@ -46,7 +46,7 @@ jobs:
           MIN_SEATS: ${{ vars.MIN_SEATS }}
           INTERVAL: ${{ vars.INTERVAL }}
           MODE: ${{ github.event.inputs.mode || '--loop' }}
-        run: python3 yusai_watch.py "$MODE"
+        run: python3 -u yusai_watch.py "$MODE"
       - uses: actions/cache/save@v4
         if: always() && steps.guard.outputs.skip == '0' && hashFiles('state.json') != ''
         with:
