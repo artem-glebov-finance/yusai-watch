@@ -14,7 +14,7 @@
   python3 yusai_watch.py --whoami   — показать chat_id тех, кто написал боту (локально)
 
 Переменные окружения: TG_TOKEN, TG_CHAT_ID, MIN_SEATS, INTERVAL, LOOP_MINUTES,
-  DATES — даты через запятую, у даты можно указать «не раньше»: YYYY-MM-DD@14:00.
+  DATES — даты через запятую, у даты можно указать окно: YYYY-MM-DD@14:00 (с), @-12:00 (до), @10:00-12:00.
 В публичных логах печатаются только счётчики, без дат и ID.
 """
 import datetime as dt
@@ -34,8 +34,14 @@ COURSES = {
 BOOK_URL = ("https://yusai.kyoto/reserve/reserve?"
             + "&".join(f"courseIds={c}" for c in sorted(COURSES)))
 JST = dt.timezone(dt.timedelta(hours=9))
-WINDOWS = dict((x.split("@") + ["00:00"])[:2] for x in
-               (d.strip() for d in (os.environ.get("DATES") or "").split(",")) if x)
+def _window(spec):
+    """'14:00' → с 14:00; '-12:00' → до 12:00 (не включая); '10:00-12:00' → окно."""
+    lo, _, hi = spec.partition("-")
+    return (lo or "00:00", hi or "24:00")
+
+
+WINDOWS = {d: _window(w) for d, _, w in
+           (x.strip().partition("@") for x in (os.environ.get("DATES") or "").split(",")) if d}
 DATES = sorted(WINDOWS)
 MIN_SEATS = int(os.environ.get("MIN_SEATS") or "2")
 INTERVAL = int(os.environ.get("INTERVAL") or "15")
@@ -67,7 +73,7 @@ def fetch_slots():
             t = dt.datetime.fromisoformat(s["dateTimeStart"].replace("Z", "+00:00")).astimezone(JST)
             d = t.strftime("%Y-%m-%d")
             hm = t.strftime("%H:%M")
-            if d not in WINDOWS or hm < WINDOWS[d] or t < now or s.get("privatelyReserved"):
+            if d not in WINDOWS or not (WINDOWS[d][0] <= hm < WINDOWS[d][1]) or t < now or s.get("privatelyReserved"):
                 continue
             out.append((d, hm, int(s.get("remainingSlots") or 0), cid))
     return sorted(out)
@@ -145,7 +151,10 @@ def check():
     print(st["last_check"], "slots:", len(slots), "with >=", MIN_SEATS, ":", len(good), "new:", len(new))
 
     if prev is None:
-        dates = ", ".join(human_date(d) + (f" с {WINDOWS[d]}" if WINDOWS[d] > "00:00" else " весь день") for d in DATES)
+        def span(lo, hi):
+            return ("весь день" if (lo, hi) == ("00:00", "24:00") else
+                    f"до {hi}" if lo == "00:00" else f"с {lo}" if hi == "24:00" else f"{lo}–{hi}")
+        dates = ", ".join(f"{human_date(d)} {span(*WINDOWS[d])}" for d in DATES)
         body = fmt(good) if good else "сейчас мест нет"
         send(f"👀 Мониторинг Юсай-тэй запущен.\nДаты: {dates}, от {MIN_SEATS} мест, проверка каждые {INTERVAL} мин.\n\n{body}")
     elif new:
